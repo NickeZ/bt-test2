@@ -13,13 +13,21 @@ class ViewController: UIViewController, CBCentralManagerDelegate, CBPeripheralDe
     var discoveredPeripheral: CBPeripheral?
     var pWriter: CBCharacteristic?
     var pReader: CBCharacteristic?
-
+    @IBOutlet weak var label: UILabel!
+    @IBOutlet weak var consoleInApp: UILabel!
+    @IBOutlet weak var messageBox: UITextField!
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         
         // Initialize the CBCentralManager
         centralManager = CBCentralManager(delegate: self, queue: nil)
         print("initialized")
+        
+        //Looks for single or multiple taps.
+         let tap = UITapGestureRecognizer(target: self, action: #selector(UIInputViewController.dismissKeyboard))
+
+        view.addGestureRecognizer(tap)
     }
 
     // MARK: - CBCentralManagerDelegate methods
@@ -128,8 +136,18 @@ class ViewController: UIViewController, CBCentralManagerDelegate, CBPeripheralDe
         } else {
             print("Succeded to write")
         }
-        let response = discoveredPeripheral?.readValue(for: pReader!)
-        print("response \(pReader!.value)")
+        }
+    
+    func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: (any Error)?) {
+        if pReader!.value == nil || pReader!.value!.isEmpty {
+            label.text = "<NO MESSAGE>"
+            return
+        }
+        let text = String(bytes:pReader!.value!.dropFirst(7), encoding: .utf8)
+        label.text = text
+        
+        consoleInApp.text?.append("RECV \(pReader!.value!)\n")
+        print("read \(pReader!.value)")
     }
 
     // This method gets called if the connection fails
@@ -144,11 +162,25 @@ class ViewController: UIViewController, CBCentralManagerDelegate, CBPeripheralDe
         // Optionally, you can start scanning again after disconnection
         centralManager.scanForPeripherals(withServices: nil, options: nil)
     }
-    @IBAction func doSomething(sender: UIButton, forEvent event: UIEvent){
+    @IBAction func sendButton(_ sender: Any) {
         let max_len = discoveredPeripheral?.maximumWriteValueLength(for: CBCharacteristicWriteType.withoutResponse)
         print("Found writer service with max length \(max_len ?? 0)")
-        let data = Data(repeating: 1, count: max_len!)
-        discoveredPeripheral?.writeValue(data, for: pWriter!, type: .withResponse)
+        let hello = messageBox!.text!
+        let header = Data(_:[0xEE, 0xEE, 0xEE, 0xEE, 0x81, 0x00, UInt8(hello.utf8.count)])
+        let data = header + hello.utf8;
         
+        discoveredPeripheral?.writeValue(data, for: pWriter!, type: .withResponse)
+        consoleInApp.text?.append("SENT \(data)\n")
     }
+    @IBAction func receiveButton(_ sender: Any) {
+        discoveredPeripheral?.readValue(for: pReader!)
+    
+    }
+    
+    //Calls this function when the tap is recognized.
+    @objc func dismissKeyboard() {
+        //Causes the view (or one of its embedded text fields) to resign the first responder status.
+        view.endEditing(true)
+    }
+
 }
