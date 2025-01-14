@@ -18,11 +18,12 @@ class ViewController: UIViewController, CBCentralManagerDelegate, CBPeripheralDe
     var sends: Int = 0;
     var acks: Int = 0;
     var waitingForInfo: Bool = false;
+    var logLines: Int = 0;
     @IBOutlet weak var label: UILabel!
     @IBOutlet weak var consoleInApp: UILabel!
     @IBOutlet weak var messageBox: UITextField!
+    @IBOutlet weak var DisconnectButton: UIButton!
     @IBOutlet weak var connectionStatus: UILabel!
-    @IBOutlet weak var ConnectButton: UIButton!
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -33,12 +34,16 @@ class ViewController: UIViewController, CBCentralManagerDelegate, CBPeripheralDe
         centralManager = CBCentralManager(delegate: self, queue: nil)
         
         //Looks for single or multiple taps.
-         let tap = UITapGestureRecognizer(target: self, action: #selector(UIInputViewController.dismissKeyboard))
+        let tap = UITapGestureRecognizer(target: self, action: #selector(UIInputViewController.dismissKeyboard))
 
         view.addGestureRecognizer(tap)
     }
-
-    // MARK: - CBCentralManagerDelegate methods
+    
+    func log(_ message: String) {
+        logLines += 1;
+        print(message)
+        consoleInApp.text?.append(String(format:"%04d ", logLines) + message + "\n")
+    }
     
     // This method gets called when the central manager’s state changes
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
@@ -65,7 +70,7 @@ class ViewController: UIViewController, CBCentralManagerDelegate, CBPeripheralDe
     
     func peripheralDidUpdateName(_ peripheral: CBPeripheral) {
         connectionStatus!.text = "\(peripheral.name ?? "unknown")"
-        print("New name: \(peripheral.name ?? "Unknown")")
+        log("New name: \(peripheral.name ?? "Unknown")")
     }
 
     // This method gets called when a peripheral is discovered
@@ -74,9 +79,6 @@ class ViewController: UIViewController, CBCentralManagerDelegate, CBPeripheralDe
         if discoveredPeripheral != nil {
             return;
         }
-        
-        print("Discovered a bitbox! \(peripheral.name ?? "unknown")")
-        
         
         // Stop scanning once a device is found
         centralManager.stopScan()
@@ -91,10 +93,11 @@ class ViewController: UIViewController, CBCentralManagerDelegate, CBPeripheralDe
 
     // This method gets called when the central manager connects to the peripheral
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
-        print("Connected to peripheral: \(peripheral.name ?? "Unknown")")
+        log("Connected to peripheral: \(peripheral.name ?? "Unknown")")
         
-        connectionStatus!.text = "\(peripheral.name ?? "unknown")"
-        ConnectButton.isEnabled = true;
+        connectionStatus!.text = "Name: \(peripheral.name ?? "unknown")"
+        
+        DisconnectButton.isEnabled = true;
         
         // Discover services once connected
         peripheral.discoverServices(nil)
@@ -103,7 +106,7 @@ class ViewController: UIViewController, CBCentralManagerDelegate, CBPeripheralDe
     // This method gets called when services are discovered on the peripheral
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         if let error = error {
-            print("Error discovering services: \(error.localizedDescription)")
+            log("Error discovering services: \(error.localizedDescription)")
             return
         }
         
@@ -120,7 +123,7 @@ class ViewController: UIViewController, CBCentralManagerDelegate, CBPeripheralDe
     // This method gets called when characteristics are discovered
     func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
         if let error = error {
-            print("Error discovering characteristics: \(error.localizedDescription)")
+            log("Error discovering characteristics: \(error.localizedDescription)")
             return
         }
         
@@ -151,7 +154,7 @@ class ViewController: UIViewController, CBCentralManagerDelegate, CBPeripheralDe
             waitingForInfo = false
         }
         if let _ = error {
-            print("Failed to write")
+            log("Failed to write")
             return
         }
         acks += 1;
@@ -160,11 +163,9 @@ class ViewController: UIViewController, CBCentralManagerDelegate, CBPeripheralDe
                 let duration = startInstant.duration(to: clock!.now);
                 let millis = duration.components.seconds*1000 + duration.components.attoseconds/1000_000_000_000_000;
                 let bandwidth = 4.0/Double(millis);
-                consoleInApp.text?.append("SENT 4096 bytes payload in \(duration). \(String( format: "%.2f", bandwidth*1000)) kBps\n")
-                print("SENT 4096 bytes payload in \(duration). \(bandwidth*1000) kBps");
+                log("Sent 4096 bytes payload in \(duration). \(String( format: "%.2f", bandwidth*1000)) kBps")
             } else {
-                consoleInApp.text?.append("SENT bytes\n")
-                print("SENT bytes")
+                log("Sent")
             }
         }
     }
@@ -179,54 +180,27 @@ class ViewController: UIViewController, CBCentralManagerDelegate, CBPeripheralDe
             label.text! += String(format: "%02X", byte);
         }
         
-        consoleInApp.text?.append("RECV len: \(pReader!.value!)\n")
-        dump(pReader!.value![..<10])
-        print("read \(pReader!.value)")
+        log("Received len: \(pReader!.value!)")
     }
 
     // This method gets called if the connection fails
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
-        print("Failed to connect to peripheral: \(error?.localizedDescription ?? "Unknown error")")
+        log("Failed to connect to peripheral: \(error?.localizedDescription ?? "Unknown error")")
     }
 
     // This method gets called if the peripheral disconnects
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
-        print("Disconnected from peripheral: \(peripheral.name ?? "Unknown")")
+        log("Disconnected from peripheral: \(peripheral.name ?? "Unknown")")
         discoveredPeripheral = nil;
         connectionStatus!.text = "Device Name"
-        
-        ConnectButton.isEnabled = false;
+        DisconnectButton.isEnabled = false;
         
         // Optionally, you can start scanning again after disconnection
         //centralManager.scanForPeripherals(withServices: [CBUUID(string: "e1511a45-f3db-44c0-82b8-6c880790d1f1")], options: nil)
         //centralManager.scanForPeripherals(withServices: nil, options: nil)
     }
     
-    @IBAction func sendButton(_ sender: Any) {
-        startInstant = nil;
-        if let p = discoveredPeripheral {
-            let hello = Array(_: messageBox!.text!.utf8)
-            let mtu = p.maximumWriteValueLength(for: CBCharacteristicWriteType.withoutResponse)
-            if (hello.count > mtu - 7) {
-                print("Cannot send message larger than \(mtu-7)")
-                return
-            }
-            let cid = [UInt8](_:[0xEE, 0xEE, 0xEE, 0xEE]);
-            let cmd = [UInt8](_:[UInt8(0x80)]);
-            let sz = [UInt8](_:[UInt8(hello.count >> 8), UInt8(hello.count & 0xff)]);
-            let header = cid + cmd + sz;
-            let data = Data(_:header + hello);
-            sends += 1;
-            p.writeValue(data, for: pWriter!, type: .withResponse)
-        }
-    }
-    @IBAction func receiveButton(_ sender: Any) {
-        if let p = discoveredPeripheral {
-            p.readValue(for: pReader!)
-        }
-    
-    }
-    @IBAction func ConnectPress(_ sender: Any) {
+    @IBAction func DisconnectPush(_ sender: Any) {
         if let p = discoveredPeripheral {
             centralManager.cancelPeripheralConnection(p)
         }
@@ -234,7 +208,7 @@ class ViewController: UIViewController, CBCentralManagerDelegate, CBPeripheralDe
     @IBAction func ScanPressed(_ sender: Any) {
         if centralManager.state == .poweredOn {
             centralManager.scanForPeripherals(withServices: [CBUUID(string: "e1511a45-f3db-44c0-82b8-6c880790d1f1")], options: nil)
-            print(" Scanning for devices...");
+            print("Scanning for devices...");
         }
     }
     @IBAction func speedTestPush(_ sender: Any) {
@@ -279,7 +253,7 @@ class ViewController: UIViewController, CBCentralManagerDelegate, CBPeripheralDe
     @IBAction func infoPush(_ sender: Any) {
         if let peripheral = discoveredPeripheral{
             let cid = [UInt8](_:[0xEE, 0xEE, 0xEE, 0xEE]);
-            let cmd = [UInt8](_:[UInt8(0x80)]);
+            let cmd = [UInt8](_:[UInt8(0x80 | 0x40 | 0x01)]);
             let sz = [UInt8](_:[0, 1]);
             let header = cid + cmd + sz;
             let packet = header + [Character("i").asciiValue!];
@@ -287,10 +261,12 @@ class ViewController: UIViewController, CBCentralManagerDelegate, CBPeripheralDe
             for (i, c) in packet.enumerated() {
                 report[i] = c;
             }
-            print("trying to send \(report)");
-            dump(report[..<8])
+            log("Sending info cmd");
             peripheral.writeValue(report, for: pWriter!, type: .withResponse)
             waitingForInfo = true
         }
+    }
+    @IBAction func ConsoleClearPush(_ sender: Any) {
+        consoleInApp.text = ""
     }
 }
