@@ -127,34 +127,27 @@ class ViewController: UIViewController, CBCentralManagerDelegate, CBPeripheralDe
             return
         }
         
+        
         if let characteristics = service.characteristics {
-            for characteristic in characteristics {
-                //print("Discovered characteristic: \(characteristic.uuid)")
-                if let characteristics = service.characteristics {
-                    for c in characteristics {
-                        if c.uuid == CBUUID(string:"0001") {
-                            pWriter = c
-                            let max_len = peripheral.maximumWriteValueLength(for: CBCharacteristicWriteType.withoutResponse)
-                                print("Found writer service with max length \(max_len)")
-                            
-                        }
-                        if c.uuid == CBUUID(string:"0002") {
-                            pReader = c
-                        }
-                    }
+            for c in characteristics {
+                if c.uuid == CBUUID(string:"799d485c-d354-4ed0-b577-f8ee79ec275a") {
+                    pWriter = c
+                    let max_len = peripheral.maximumWriteValueLength(for: CBCharacteristicWriteType.withoutResponse)
+                    print("Found writer service with max length \(max_len)")
+                    
+                }
+                if c.uuid == CBUUID(string:"419572a5-9f53-4eb1-8db7-61bcab928867") {
+                    peripheral.setNotifyValue(true, for:c);
+                    pReader = c
                 }
             }
+            
         }
     }
     
     func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
-        if waitingForInfo {
-            // Issue read
-            peripheral.readValue(for: pReader!)
-            waitingForInfo = false
-        }
-        if let _ = error {
-            log("Failed to write")
+        if let e = error {
+            log("Failed to write \(e)")
             return
         }
         acks += 1;
@@ -257,7 +250,7 @@ class ViewController: UIViewController, CBCentralManagerDelegate, CBPeripheralDe
             let sz = [UInt8](_:[0, 1]);
             let header = cid + cmd + sz;
             let packet = header + [Character("i").asciiValue!];
-            var report = Data(count: 64);
+            var report = Data(count: 10);
             for (i, c) in packet.enumerated() {
                 report[i] = c;
             }
