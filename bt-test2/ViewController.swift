@@ -1,3 +1,4 @@
+import AccessorySetupKit
 import CoreBluetooth
 //
 //  ViewController.swift
@@ -24,14 +25,117 @@ class ViewController: UIViewController, CBCentralManagerDelegate, CBPeripheralDe
     @IBOutlet weak var messageBox: UITextField!
     @IBOutlet weak var DisconnectButton: UIButton!
     @IBOutlet weak var connectionStatus: UILabel!
+    var asSession: Any?
+    var pickedAccessory: Any?
+
+    @available(iOS 18.0, *)
+    private func showMyPicker() {
+        guard let session = asSession as? ASAccessorySession else {
+            return
+        }
+        let descriptor = ASDiscoveryDescriptor()
+        descriptor.bluetoothServiceUUID = CBUUID(string: "e1511a45-f3db-44c0-82b8-6c880790d1f1")  // If using Wi-Fi, set descriptor.ssid instead.
+        descriptor.supportedOptions = ASAccessory.SupportOptions.bluetoothPairingLE
+
+        let displayName = "BitBox02 Nova"
+        guard let productImage = UIImage(named: "bitboxlogo") else {
+            print("not found")
+            return
+        }
+
+        var items: [ASPickerDisplayItem] = []
+        items.append(
+            ASPickerDisplayItem(
+                name: displayName,
+                productImage: productImage,
+                descriptor: descriptor))
+
+        // Create additional picker items if you support multiple accessories
+        // with different Wi-Fi SSIDs or Bluetooth service UUIDs.
+
+        session.showPicker(for: items) { error in
+            if let error {
+                print("ble: error \(error)")
+            } else {
+                // Perform any post-picker cleanup.
+                // If the picker finished by selecting an item, the event
+                // handler receives it as an event of type `.accessoryAdded`.
+            }
+        }
+
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
 
         clock = ContinuousClock()
 
-        // Initialize the CBCentralManager
-        centralManager = CBCentralManager(delegate: self, queue: nil)
+        // In iOS 18+ we wait with creating CBCentralManager until
+        // AccessorySetup is activated. So that we can check the list of
+        // associated devices when BLE is powered on.
+
+        if #available(iOS 18.0, *) {
+            // Can use AccessorySetupKit here
+            let session = ASAccessorySession()
+            session.activate(on: DispatchQueue.main) { [weak self] event in
+                guard let self else { return }
+
+                switch event.eventType {
+                // Use previously-discovered accessories in
+                // session.accessories, if necessary.
+                case .activated:
+                    print("activated")
+                    centralManager = CBCentralManager(delegate: self, queue: nil)
+
+                // Handle addition of an accessory by person using the app.
+                case .accessoryAdded:
+                    print("added")
+                    // Store picked accessory temporarily here until dialog is dismissed
+                    self.pickedAccessory = event.accessory
+
+                // Handle removal or change of previously-added
+                // accessory, if necessary.
+                case .accessoryRemoved, .accessoryChanged:
+                    print("removed")
+
+                // The session is now invalid and you can't use it further.
+                case .invalidated:
+                    print("invalidated")
+
+                // Handle migration.
+                case .migrationComplete:
+                    print("mig complete")
+
+                // Update state for picker appearing, if necessary.
+                case .pickerDidPresent:
+                    print("picker presented")
+
+                // Update state for picker disappearing, if necessary.
+                case .pickerDidDismiss:
+                    print("dismiss")
+                    guard let accessory = self.pickedAccessory as? ASAccessory else { return }
+                    self.pickedAccessory = nil
+                    if centralManager == nil {
+                        centralManager = CBCentralManager(delegate: self, queue: nil)
+                    }
+
+                // Handle unknown event type, if appropriate.
+                case .unknown:
+                    print("unknown")
+
+                // Reserve this space for yet-to-be-defined event types.
+                @unknown default:
+                    print("default")
+                }
+            }
+            // Configure and present it
+
+            asSession = session
+
+        } else {
+            // Initialize the CBCentralManager
+            centralManager = CBCentralManager(delegate: self, queue: nil)
+        }
 
         //Looks for single or multiple taps.
         let tap = UITapGestureRecognizer(
@@ -52,8 +156,22 @@ class ViewController: UIViewController, CBCentralManagerDelegate, CBPeripheralDe
         case .poweredOn:
             // Bluetooth is powered on and ready, start scanning
             print("Bluetooth is powered on.")
+
+            if #available(iOS 18.0, *) {
+                // state will only be updated to poweredOn when you have paired accessories
+                guard let session = asSession as? ASAccessorySession else { return }
+                guard let accessory = session.accessories.first else { return }
+                let p = central.retrievePeripherals(withIdentifiers: [
+                    accessory.bluetoothIdentifier!
+                ]).first
+                discoveredPeripheral = p
+                discoveredPeripheral?.delegate = self
+                central.connect(p!)
+            }
+        // Automatically scan on power on
         //centralManager.scanForPeripherals(withServices: [CBUUID(string: "e1511a45-f3db-44c0-82b8-6c880790d1f1")], options: nil)
         //centralManager.scanForPeripherals(withServices: nil, options: nil)
+
         case .poweredOff:
             print("Bluetooth is powered off.")
         case .resetting:
@@ -79,6 +197,7 @@ class ViewController: UIViewController, CBCentralManagerDelegate, CBPeripheralDe
         _ central: CBCentralManager, didDiscover peripheral: CBPeripheral,
         advertisementData: [String: Any], rssi RSSI: NSNumber
     ) {
+        log("Discovered peripheral: \(peripheral.name ?? "Unknown")")
 
         if discoveredPeripheral != nil {
             return
@@ -218,7 +337,9 @@ class ViewController: UIViewController, CBCentralManagerDelegate, CBPeripheralDe
         }
     }
     @IBAction func ScanPressed(_ sender: Any) {
-        if centralManager.state == .poweredOn {
+        if #available(iOS 18.0, *) {
+            showMyPicker()
+        } else if centralManager.state == .poweredOn {
             centralManager.scanForPeripherals(
                 withServices: [CBUUID(string: "e1511a45-f3db-44c0-82b8-6c880790d1f1")], options: nil
             )
@@ -272,7 +393,7 @@ class ViewController: UIViewController, CBCentralManagerDelegate, CBPeripheralDe
             let sz = [UInt8](_: [0, 1])
             let header = cid + cmd + sz
             let packet = header + [Character("i").asciiValue!]
-            var report = Data(count: 10)
+            var report = Data(count: 64)
             for (i, c) in packet.enumerated() {
                 report[i] = c
             }
