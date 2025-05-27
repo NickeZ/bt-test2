@@ -27,6 +27,8 @@ class ViewController: UIViewController, CBCentralManagerDelegate, CBPeripheralDe
     @IBOutlet weak var connectionStatus: UILabel!
     var asSession: Any?
     var pickedAccessory: Any?
+    // If this CBPeripheral is dropped, iOS will stop trying to connect
+    var reconnectPeripheral: CBPeripheral?
 
     @available(iOS 18.0, *)
     private func showMyPicker() {
@@ -165,6 +167,7 @@ class ViewController: UIViewController, CBCentralManagerDelegate, CBPeripheralDe
                     accessory.bluetoothIdentifier!
                 ]).first
                 discoveredPeripheral = p
+                reconnectPeripheral = p;
                 discoveredPeripheral?.delegate = self
                 central.connect(p!)
             }
@@ -326,10 +329,11 @@ class ViewController: UIViewController, CBCentralManagerDelegate, CBPeripheralDe
         discoveredPeripheral = nil
         connectionStatus!.text = "Device Name"
         DisconnectButton.isEnabled = false
+        central.connect(reconnectPeripheral!);
 
         // Optionally, you can start scanning again after disconnection
-        centralManager.scanForPeripherals(withServices: [CBUUID(string: "e1511a45-f3db-44c0-82b8-6c880790d1f1")], options: nil)
-        //centralManager.scanForPeripherals(withServices: nil, options: nil)
+//        centralManager.scanForPeripherals(withServices: [CBUUID(string: "e1511a45-f3db-44c0-82b8-6c880790d1f1")], options: nil)
+//        centralManager.scanForPeripherals(withServices: nil, options: nil)
     }
 
     @IBAction func DisconnectPush(_ sender: Any) {
