@@ -221,6 +221,7 @@ class ViewController: UIViewController, CBCentralManagerDelegate, CBPeripheralDe
         connectionStatus!.text = "Name: \(peripheral.name ?? "unknown")"
 
         DisconnectButton.isEnabled = true
+        central.stopScan()
 
         // Discover services once connected
         peripheral.discoverServices(nil)
@@ -327,7 +328,7 @@ class ViewController: UIViewController, CBCentralManagerDelegate, CBPeripheralDe
         DisconnectButton.isEnabled = false
 
         // Optionally, you can start scanning again after disconnection
-        //centralManager.scanForPeripherals(withServices: [CBUUID(string: "e1511a45-f3db-44c0-82b8-6c880790d1f1")], options: nil)
+        centralManager.scanForPeripherals(withServices: [CBUUID(string: "e1511a45-f3db-44c0-82b8-6c880790d1f1")], options: nil)
         //centralManager.scanForPeripherals(withServices: nil, options: nil)
     }
 
