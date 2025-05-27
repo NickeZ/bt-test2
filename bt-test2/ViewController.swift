@@ -387,6 +387,7 @@ class ViewController: UIViewController, CBCentralManagerDelegate, CBPeripheralDe
     }
 
     @IBAction func infoPush(_ sender: Any) {
+        print("info pushed")
         if let peripheral = discoveredPeripheral {
             let cid = [UInt8](_: [0xEE, 0xEE, 0xEE, 0xEE])
             let cmd = [UInt8](_: [UInt8(0x80 | 0x40 | 0x01)])

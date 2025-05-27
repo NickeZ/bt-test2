@@ -295,7 +295,6 @@
 				DEVELOPMENT_TEAM = 6NA5BC74R8;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "bt-test2/Info.plist";
-				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "App needs bluetooth to conenct to bitbox";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
@@ -325,7 +324,6 @@
 				DEVELOPMENT_TEAM = 6NA5BC74R8;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "bt-test2/Info.plist";
-				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "App needs bluetooth to conenct to bitbox";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
